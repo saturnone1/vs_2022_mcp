@@ -1,0 +1,87 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using CodingWithCalvin.MCPServer.Shared.Models;
+
+namespace CodingWithCalvin.MCPServer.Shared;
+
+/// <summary>
+/// RPC interface for Visual Studio operations.
+/// Implemented by VS extension, called by MCP server process.
+/// </summary>
+public interface IVisualStudioRpc
+{
+    Task<SolutionInfo?> GetSolutionInfoAsync();
+    Task<bool> OpenSolutionAsync(string path);
+    Task CloseSolutionAsync(bool saveFirst);
+    Task<List<ProjectInfo>> GetProjectsAsync();
+
+    Task<List<DocumentInfo>> GetOpenDocumentsAsync();
+    Task<DocumentInfo?> GetActiveDocumentAsync();
+    Task<bool> OpenDocumentAsync(string path);
+    Task<bool> CloseDocumentAsync(string path, bool save);
+    Task<bool> SaveDocumentAsync(string path);
+    Task<bool> RunCodeCleanupAsync(string path);
+    Task<string?> ReadDocumentAsync(string path);
+    Task<bool> WriteDocumentAsync(string path, string content);
+    Task<SelectionInfo?> GetSelectionAsync();
+    Task<bool> SetSelectionAsync(string path, int startLine, int startColumn, int endLine, int endColumn);
+
+    Task<bool> InsertTextAsync(string text);
+    Task<int> ReplaceTextAsync(string oldText, string newText);
+    Task<bool> GoToLineAsync(int line);
+    Task<List<FindResult>> FindAsync(string searchText, bool matchCase, bool wholeWord);
+
+    Task<bool> BuildSolutionAsync();
+    Task<bool> BuildProjectAsync(string projectName);
+    Task<bool> CleanSolutionAsync();
+    Task<bool> CancelBuildAsync();
+    Task<BuildStatus> GetBuildStatusAsync();
+
+    Task<List<SymbolInfo>> GetDocumentSymbolsAsync(string path);
+    Task<WorkspaceSymbolResult> SearchWorkspaceSymbolsAsync(string query, int maxResults = 100);
+    Task<DefinitionResult> GoToDefinitionAsync(string path, int line, int column);
+    Task<ReferencesResult> FindReferencesAsync(string path, int line, int column, int maxResults = 100);
+
+    Task<DebuggerStatus> GetDebuggerStatusAsync();
+    Task<string?> GetStartupProjectAsync();
+    Task<bool> SetStartupProjectAsync(string projectName);
+    Task<bool> DebugLaunchAsync();
+    Task<bool> DebugLaunchProjectAsync(string projectName, bool noDebug);
+    Task<bool> DebugLaunchWithoutDebuggingAsync();
+    Task<bool> DebugContinueAsync();
+    Task<bool> DebugBreakAsync();
+    Task<bool> DebugStopAsync();
+    Task<bool> DebugStepOverAsync();
+    Task<bool> DebugStepIntoAsync();
+    Task<bool> DebugStepOutAsync();
+
+    Task<bool> DebugAddBreakpointAsync(string file, int line);
+    Task<bool> DebugRemoveBreakpointAsync(string file, int line);
+    Task<List<BreakpointInfo>> DebugGetBreakpointsAsync();
+    Task<List<LocalVariableInfo>> DebugGetLocalsAsync();
+    Task<ExpressionResult> DebugEvaluateExpressionAsync(string expression);
+    Task<bool> DebugSetVariableValueAsync(string variableName, string value);
+    Task<List<CallStackFrameInfo>> DebugGetCallStackAsync();
+
+    // Diagnostics tools
+    Task<ErrorListResult> GetErrorListAsync(string? severity = null, int maxResults = 100);
+    Task<OutputReadResult> ReadOutputPaneAsync(string paneIdentifier);
+    Task<bool> WriteOutputPaneAsync(string paneIdentifier, string message, bool activate = false);
+    Task<List<OutputPaneInfo>> GetOutputPanesAsync();
+
+    // Window management tools
+    Task<List<WindowInfo>> GetWindowsAsync();
+    Task<bool> ActivateWindowAsync(string caption);
+    Task<bool> ShowToolWindowAsync(string name);
+    Task<bool> HideToolWindowAsync(string caption);
+}
+
+/// <summary>
+/// RPC interface for MCP Server operations.
+/// Implemented by MCP server process, called by VS extension.
+/// </summary>
+public interface IServerRpc
+{
+    Task<List<ToolInfo>> GetAvailableToolsAsync();
+    Task ShutdownAsync();
+}

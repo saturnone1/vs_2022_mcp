@@ -1,0 +1,172 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO.Pipes;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using CodingWithCalvin.MCPServer.Shared;
+using CodingWithCalvin.MCPServer.Shared.Models;
+using ModelContextProtocol.Server;
+using StreamJsonRpc;
+
+namespace CodingWithCalvin.MCPServer.Server;
+
+public class RpcClient : IVisualStudioRpc, IServerRpc, IDisposable
+{
+    private readonly CancellationTokenSource _shutdownCts;
+    private NamedPipeClientStream? _pipeClient;
+    private JsonRpc? _jsonRpc;
+    private IVisualStudioRpc? _proxy;
+    private bool _disposed;
+    private List<ToolInfo>? _cachedTools;
+
+    public bool IsConnected => _pipeClient?.IsConnected ?? false;
+
+    public RpcClient(CancellationTokenSource shutdownCts)
+    {
+        _shutdownCts = shutdownCts;
+    }
+
+    public async Task ConnectAsync(string pipeName, int timeoutMs = 10000)
+    {
+        _pipeClient = new NamedPipeClientStream(
+            ".",
+            pipeName,
+            PipeDirection.InOut,
+            PipeOptions.Asynchronous);
+
+        await _pipeClient.ConnectAsync(timeoutMs);
+
+        _jsonRpc = JsonRpc.Attach(_pipeClient, this);
+        _proxy = _jsonRpc.Attach<IVisualStudioRpc>();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _jsonRpc?.Dispose();
+        _pipeClient?.Dispose();
+    }
+
+    private IVisualStudioRpc Proxy => _proxy ?? throw new InvalidOperationException("Not connected to Visual Studio");
+
+    public Task<List<ToolInfo>> GetAvailableToolsAsync()
+    {
+        if (_cachedTools != null)
+        {
+            return Task.FromResult(_cachedTools);
+        }
+
+        var tools = new List<ToolInfo>();
+        var toolTypes = new[] { typeof(Tools.SolutionTools), typeof(Tools.DocumentTools), typeof(Tools.BuildTools), typeof(Tools.NavigationTools), typeof(Tools.DebuggerTools), typeof(Tools.DiagnosticsTools), typeof(Tools.WindowTools) };
+
+        foreach (var toolType in toolTypes)
+        {
+            var category = toolType.Name.Replace("Tools", "");
+
+            foreach (var method in toolType.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+            {
+                var toolAttr = method.GetCustomAttribute<McpServerToolAttribute>();
+                if (toolAttr == null)
+                {
+                    continue;
+                }
+
+                var descAttr = method.GetCustomAttribute<DescriptionAttribute>();
+
+                tools.Add(new ToolInfo
+                {
+                    Name = toolAttr.Name ?? method.Name,
+                    Description = descAttr?.Description ?? string.Empty,
+                    Category = category
+                });
+            }
+        }
+
+        _cachedTools = tools;
+        return Task.FromResult(tools);
+    }
+
+    public Task ShutdownAsync()
+    {
+#pragma warning disable VSTHRD103 // Console.Error.WriteLine is fine in console app context
+        Console.Error.WriteLine("Shutdown requested via RPC");
+        _shutdownCts.Cancel();
+#pragma warning restore VSTHRD103
+        return Task.CompletedTask;
+    }
+
+    public Task<SolutionInfo?> GetSolutionInfoAsync() => Proxy.GetSolutionInfoAsync();
+    public Task<bool> OpenSolutionAsync(string path) => Proxy.OpenSolutionAsync(path);
+    public Task CloseSolutionAsync(bool saveFirst) => Proxy.CloseSolutionAsync(saveFirst);
+    public Task<List<ProjectInfo>> GetProjectsAsync() => Proxy.GetProjectsAsync();
+    public Task<List<DocumentInfo>> GetOpenDocumentsAsync() => Proxy.GetOpenDocumentsAsync();
+    public Task<DocumentInfo?> GetActiveDocumentAsync() => Proxy.GetActiveDocumentAsync();
+    public Task<bool> OpenDocumentAsync(string path) => Proxy.OpenDocumentAsync(path);
+    public Task<bool> CloseDocumentAsync(string path, bool save) => Proxy.CloseDocumentAsync(path, save);
+    public Task<bool> SaveDocumentAsync(string path) => Proxy.SaveDocumentAsync(path);
+    public Task<bool> RunCodeCleanupAsync(string path) => Proxy.RunCodeCleanupAsync(path);
+    public Task<string?> ReadDocumentAsync(string path) => Proxy.ReadDocumentAsync(path);
+    public Task<bool> WriteDocumentAsync(string path, string content) => Proxy.WriteDocumentAsync(path, content);
+    public Task<SelectionInfo?> GetSelectionAsync() => Proxy.GetSelectionAsync();
+    public Task<bool> SetSelectionAsync(string path, int startLine, int startColumn, int endLine, int endColumn)
+        => Proxy.SetSelectionAsync(path, startLine, startColumn, endLine, endColumn);
+    public Task<bool> InsertTextAsync(string text) => Proxy.InsertTextAsync(text);
+    public Task<int> ReplaceTextAsync(string oldText, string newText) => Proxy.ReplaceTextAsync(oldText, newText);
+    public Task<bool> GoToLineAsync(int line) => Proxy.GoToLineAsync(line);
+    public Task<List<FindResult>> FindAsync(string searchText, bool matchCase, bool wholeWord)
+        => Proxy.FindAsync(searchText, matchCase, wholeWord);
+    public Task<bool> BuildSolutionAsync() => Proxy.BuildSolutionAsync();
+    public Task<bool> BuildProjectAsync(string projectName) => Proxy.BuildProjectAsync(projectName);
+    public Task<bool> CleanSolutionAsync() => Proxy.CleanSolutionAsync();
+    public Task<bool> CancelBuildAsync() => Proxy.CancelBuildAsync();
+    public Task<BuildStatus> GetBuildStatusAsync() => Proxy.GetBuildStatusAsync();
+
+    public Task<List<SymbolInfo>> GetDocumentSymbolsAsync(string path) => Proxy.GetDocumentSymbolsAsync(path);
+    public Task<WorkspaceSymbolResult> SearchWorkspaceSymbolsAsync(string query, int maxResults = 100)
+        => Proxy.SearchWorkspaceSymbolsAsync(query, maxResults);
+    public Task<DefinitionResult> GoToDefinitionAsync(string path, int line, int column)
+        => Proxy.GoToDefinitionAsync(path, line, column);
+    public Task<ReferencesResult> FindReferencesAsync(string path, int line, int column, int maxResults = 100)
+        => Proxy.FindReferencesAsync(path, line, column, maxResults);
+
+    public Task<DebuggerStatus> GetDebuggerStatusAsync() => Proxy.GetDebuggerStatusAsync();
+    public Task<string?> GetStartupProjectAsync() => Proxy.GetStartupProjectAsync();
+    public Task<bool> SetStartupProjectAsync(string projectName) => Proxy.SetStartupProjectAsync(projectName);
+    public Task<bool> DebugLaunchAsync() => Proxy.DebugLaunchAsync();
+    public Task<bool> DebugLaunchProjectAsync(string projectName, bool noDebug) => Proxy.DebugLaunchProjectAsync(projectName, noDebug);
+    public Task<bool> DebugLaunchWithoutDebuggingAsync() => Proxy.DebugLaunchWithoutDebuggingAsync();
+    public Task<bool> DebugContinueAsync() => Proxy.DebugContinueAsync();
+    public Task<bool> DebugBreakAsync() => Proxy.DebugBreakAsync();
+    public Task<bool> DebugStopAsync() => Proxy.DebugStopAsync();
+    public Task<bool> DebugStepOverAsync() => Proxy.DebugStepOverAsync();
+    public Task<bool> DebugStepIntoAsync() => Proxy.DebugStepIntoAsync();
+    public Task<bool> DebugStepOutAsync() => Proxy.DebugStepOutAsync();
+
+    public Task<bool> DebugAddBreakpointAsync(string file, int line) => Proxy.DebugAddBreakpointAsync(file, line);
+    public Task<bool> DebugRemoveBreakpointAsync(string file, int line) => Proxy.DebugRemoveBreakpointAsync(file, line);
+    public Task<List<BreakpointInfo>> DebugGetBreakpointsAsync() => Proxy.DebugGetBreakpointsAsync();
+    public Task<List<Shared.Models.LocalVariableInfo>> DebugGetLocalsAsync() => Proxy.DebugGetLocalsAsync();
+    public Task<ExpressionResult> DebugEvaluateExpressionAsync(string expression) => Proxy.DebugEvaluateExpressionAsync(expression);
+    public Task<bool> DebugSetVariableValueAsync(string variableName, string value) => Proxy.DebugSetVariableValueAsync(variableName, value);
+    public Task<List<CallStackFrameInfo>> DebugGetCallStackAsync() => Proxy.DebugGetCallStackAsync();
+
+    public Task<ErrorListResult> GetErrorListAsync(string? severity = null, int maxResults = 100)
+        => Proxy.GetErrorListAsync(severity, maxResults);
+    public Task<OutputReadResult> ReadOutputPaneAsync(string paneIdentifier) => Proxy.ReadOutputPaneAsync(paneIdentifier);
+    public Task<bool> WriteOutputPaneAsync(string paneIdentifier, string message, bool activate = false)
+        => Proxy.WriteOutputPaneAsync(paneIdentifier, message, activate);
+    public Task<List<OutputPaneInfo>> GetOutputPanesAsync() => Proxy.GetOutputPanesAsync();
+
+    public Task<List<WindowInfo>> GetWindowsAsync() => Proxy.GetWindowsAsync();
+    public Task<bool> ActivateWindowAsync(string caption) => Proxy.ActivateWindowAsync(caption);
+    public Task<bool> ShowToolWindowAsync(string name) => Proxy.ShowToolWindowAsync(name);
+    public Task<bool> HideToolWindowAsync(string caption) => Proxy.HideToolWindowAsync(caption);
+}

@@ -1,0 +1,17 @@
+name: Publish to VS Marketplace
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    uses: CodingWithCalvin/.github/.github/workflows/vsix-publish.yml@main
+    with:
+      extension-name: MCPServer
+      display-name: 'MCP Server'
+      marketplace-id: CodingWithCalvin.VS-MCPServer
+    secrets: inherit
