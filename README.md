@@ -19,53 +19,54 @@
 
 ---
 
-## Visual Studio 2022 17.12 Port
+## Visual Studio 2022 17.12 포팅
 
-This repository is a personal port of the original VS MCP Server project for
-Visual Studio 2022 17.12. I made this fork because the upstream project had moved
-to newer Visual Studio/.NET assumptions, including .NET 10 and Visual Studio SDK
-17.14-era package references, which do not build or load cleanly in a Visual
-Studio 2022 17.12 environment.
+이 저장소는 원본 VS MCP Server 프로젝트를 Visual Studio 2022 17.12에서
+사용하기 위해 개인적으로 포팅한 버전입니다. 원본 프로젝트는 .NET 10 및
+Visual Studio SDK 17.14 계열 패키지 기준으로 이동해 있었고, 이 상태에서는
+Visual Studio 2022 17.12 환경에서 빌드하거나 확장을 로드할 때 문제가
+발생했습니다.
 
-### What Changed
+### 작업 내용
 
-- Retargeted the server and shared projects from `net10.0` to `net9.0`.
-- Added `global.json` so local builds use the .NET 9 SDK line.
-- Pinned Visual Studio SDK dependencies to the 17.12 package line.
-- Restricted the VSIX manifest installation target to Visual Studio 2022 17.12
-  through the VS 2022 range.
-- Added explicit VSIX packaging because the SDK-style VSIX project did not emit
-  a `.vsix` file in this environment.
-- Generated the VSIX through the Visual Studio SDK `VsixUtil` tool and then
-  injected the extension payload with stable package paths.
-- Removed Visual Studio-provided assemblies from the VSIX payload
-  (`Microsoft.VisualStudio.*`, `EnvDTE*`, `stdole.*`, `VSLangProj*`) to avoid
-  runtime binding conflicts inside Visual Studio 2022.
-- Removed the external `CodingWithCalvin.Otel4Vsix`/OpenTelemetry dependency
-  from the VSIX build and replaced the calls with a no-op telemetry shim for
-  better VS 2022 17.12 load compatibility.
-- Added guarded package initialization logging at
-  `%LOCALAPPDATA%\VS-MCPServer\extension-load.log` to make Visual Studio package
-  load failures easier to diagnose.
-- Updated the VSIX version to `1.0.2`.
+- 서버 프로젝트와 공유 라이브러리 타깃을 `net10.0`에서 `net9.0`으로
+  변경했습니다.
+- 로컬 빌드가 .NET 9 SDK 계열을 사용하도록 `global.json`을 추가했습니다.
+- Visual Studio SDK 관련 패키지를 17.12 계열로 고정했습니다.
+- VSIX manifest의 설치 대상을 Visual Studio 2022 17.12 이상, VS 2022 범위로
+  제한했습니다.
+- SDK 스타일 VSIX 프로젝트가 이 환경에서 `.vsix` 파일을 생성하지 않아,
+  명시적인 VSIX 패키징 타깃을 추가했습니다.
+- Visual Studio SDK의 `VsixUtil` 도구로 기본 VSIX 패키지를 만든 뒤, 확장
+  payload를 안정적인 경로로 주입하도록 패키징 스크립트를 추가했습니다.
+- Visual Studio 2022 내부 어셈블리와 충돌하지 않도록 VSIX payload에서
+  Visual Studio가 제공하는 어셈블리(`Microsoft.VisualStudio.*`, `EnvDTE*`,
+  `stdole.*`, `VSLangProj*`)를 제외했습니다.
+- Visual Studio 2022 17.12 로드 호환성을 위해 외부
+  `CodingWithCalvin.Otel4Vsix`/OpenTelemetry 의존성을 제거하고, 기존 호출은
+  no-op telemetry shim으로 대체했습니다.
+- 패키지 로드 문제를 추적하기 쉽도록
+  `%LOCALAPPDATA%\VS-MCPServer\extension-load.log`에 초기화 로그를 남기도록
+  했습니다.
+- VSIX 버전을 `1.0.2`로 갱신했습니다.
 
-### Build Notes
+### 빌드 방법
 
-Build with:
+다음 명령으로 빌드합니다.
 
 ```powershell
 dotnet build src\CodingWithCalvin.MCPServer.slnx -c Release -m:1
 ```
 
-The VSIX is emitted at:
+빌드가 끝나면 VSIX는 다음 위치에 생성됩니다.
 
 ```text
 src\CodingWithCalvin.MCPServer\bin\Release\VS-MCPServer.vsix
 ```
 
-When testing install/load issues, remove any previously installed MCP Server
-extension, close Visual Studio completely, and clear the Visual Studio component
-model cache if needed.
+설치 또는 로드 문제를 테스트할 때는 기존에 설치된 MCP Server 확장을 제거하고,
+Visual Studio를 완전히 종료한 뒤 다시 설치하는 것을 권장합니다. 필요한 경우
+Visual Studio component model cache도 삭제하세요.
 
 ## 🤔 What is this?
 
