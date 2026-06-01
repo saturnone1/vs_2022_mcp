@@ -19,6 +19,54 @@
 
 ---
 
+## Visual Studio 2022 17.12 Port
+
+This repository is a personal port of the original VS MCP Server project for
+Visual Studio 2022 17.12. I made this fork because the upstream project had moved
+to newer Visual Studio/.NET assumptions, including .NET 10 and Visual Studio SDK
+17.14-era package references, which do not build or load cleanly in a Visual
+Studio 2022 17.12 environment.
+
+### What Changed
+
+- Retargeted the server and shared projects from `net10.0` to `net9.0`.
+- Added `global.json` so local builds use the .NET 9 SDK line.
+- Pinned Visual Studio SDK dependencies to the 17.12 package line.
+- Restricted the VSIX manifest installation target to Visual Studio 2022 17.12
+  through the VS 2022 range.
+- Added explicit VSIX packaging because the SDK-style VSIX project did not emit
+  a `.vsix` file in this environment.
+- Generated the VSIX through the Visual Studio SDK `VsixUtil` tool and then
+  injected the extension payload with stable package paths.
+- Removed Visual Studio-provided assemblies from the VSIX payload
+  (`Microsoft.VisualStudio.*`, `EnvDTE*`, `stdole.*`, `VSLangProj*`) to avoid
+  runtime binding conflicts inside Visual Studio 2022.
+- Removed the external `CodingWithCalvin.Otel4Vsix`/OpenTelemetry dependency
+  from the VSIX build and replaced the calls with a no-op telemetry shim for
+  better VS 2022 17.12 load compatibility.
+- Added guarded package initialization logging at
+  `%LOCALAPPDATA%\VS-MCPServer\extension-load.log` to make Visual Studio package
+  load failures easier to diagnose.
+- Updated the VSIX version to `1.0.2`.
+
+### Build Notes
+
+Build with:
+
+```powershell
+dotnet build src\CodingWithCalvin.MCPServer.slnx -c Release -m:1
+```
+
+The VSIX is emitted at:
+
+```text
+src\CodingWithCalvin.MCPServer\bin\Release\VS-MCPServer.vsix
+```
+
+When testing install/load issues, remove any previously installed MCP Server
+extension, close Visual Studio completely, and clear the Visual Studio component
+model cache if needed.
+
 ## 🤔 What is this?
 
 **VS MCP Server** exposes Visual Studio features through the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/), enabling AI assistants like Claude to interact with your IDE programmatically. Open files, read code, build projects, and more - all through natural conversation!
