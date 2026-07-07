@@ -95,6 +95,8 @@
 
     <ItemGroup>
       <VsixOutputFiles Include="$(OutputPath)**\*.*" />
+      <VsixOutputFiles Remove="$(OutputPath)**\*.vsix" />
+      <VsixOutputFiles Remove="$(OutputPath)**\*.zip" />
       <VsixOutputFiles Remove="$(OutputPath)Microsoft.VisualStudio.*" />
       <VsixOutputFiles Remove="$(OutputPath)**\Microsoft.VisualStudio.*" />
       <VsixOutputFiles Remove="$(OutputPath)Microsoft.ServiceHub.*" />
