@@ -1,18 +1,31 @@
-﻿<Project Sdk="CodingWithCalvin.VsixSdk/0.4.0">
+<Project Sdk="CodingWithCalvin.VsixSdk/0.4.0">
 
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
     <RootNamespace>CodingWithCalvin.MCPServer</RootNamespace>
-    <!-- Suppress VS-Threading analyzer warnings that are architectural decisions or false positives in VSIX context -->
+    <AssemblyName>CodingWithCalvin.MCPServer</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultVsctItems>false</EnableDefaultVsctItems>
     <NoWarn>$(NoWarn);VSTHRD002;VSTHRD003;VSTHRD010;VSTHRD110;VSSDK007</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.VisualStudio.Editor" Version="17.12.*" />
-    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.12.*" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.12.*" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.Editor" Version="17.0.*" />
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.0.*" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.0.5241" PrivateAssets="all" />
+    <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="9.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CodingWithCalvin.MCPServer\**\*.cs"
+             Exclude="..\CodingWithCalvin.MCPServer\bin\**;..\CodingWithCalvin.MCPServer\obj\**;..\CodingWithCalvin.MCPServer\Generated\**"
+             Link="%(RecursiveDir)%(Filename)%(Extension)" />
+    <VSCTCompile Include="..\CodingWithCalvin.MCPServer\VSCommandTable.vsct" Link="VSCommandTable.vsct">
+      <ResourceName>$(VSCTResourceName)</ResourceName>
+    </VSCTCompile>
   </ItemGroup>
 
   <ItemGroup>
@@ -32,22 +45,21 @@
   </ItemGroup>
 
   <PropertyGroup>
+    <ExtensionSourceDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\CodingWithCalvin.MCPServer\'))</ExtensionSourceDir>
     <ServerProjectDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\CodingWithCalvin.MCPServer.Server\'))</ServerProjectDir>
-    <ServerOutputDir>$(ServerProjectDir)bin\$(Configuration)\net9.0\</ServerOutputDir>
     <ServerPublishDir>$(ServerProjectDir)bin\$(Configuration)\net9.0\publish\</ServerPublishDir>
+    <NuGetPackageRoot Condition="'$(NuGetPackageRoot)' == ''">$(USERPROFILE)\.nuget\packages\</NuGetPackageRoot>
     <VsixPackageDir>$(MSBuildThisFileDirectory)bin\$(Configuration)\</VsixPackageDir>
     <VsixPackageStagingDir>$(MSBuildProjectDirectory)\obj\$(Configuration)\vsix\</VsixPackageStagingDir>
-    <VsixPackagePath>$(VsixPackageDir)VS-MCPServer.vsix</VsixPackagePath>
-    <VsixPackageZipPath>$(VsixPackageDir)VS-MCPServer.zip</VsixPackageZipPath>
+    <VsixPackagePath>$(VsixPackageDir)VS-MCPServer-VS2022-17.0.vsix</VsixPackagePath>
+    <VsixPackageZipPath>$(VsixPackageDir)VS-MCPServer-VS2022-17.0.zip</VsixPackageZipPath>
   </PropertyGroup>
 
-  <!-- Build and publish the server project as self-contained -->
   <Target Name="BuildServer" BeforeTargets="Build">
     <Exec Command="dotnet publish &quot;$(ServerProjectDir)CodingWithCalvin.MCPServer.Server.csproj&quot; -c $(Configuration) --self-contained -r win-x64 -o &quot;$(ServerPublishDir)&quot;" />
     <Message Importance="high" Text="Server published to: $(ServerPublishDir)" />
   </Target>
 
-  <!-- Include the server executable in the VSIX -->
   <Target Name="IncludeServerInVsix" BeforeTargets="GetVsixSourceItems" DependsOnTargets="BuildServer">
     <ItemGroup>
       <VSIXSourceItem Include="$(ServerPublishDir)**\*.*">
@@ -57,7 +69,6 @@
     <Message Importance="high" Text="Including server from: $(ServerPublishDir)" />
   </Target>
 
-  <!-- Copy server files to output directory for debugging -->
   <Target Name="CopyServerToOutput" AfterTargets="Build" DependsOnTargets="BuildServer">
     <ItemGroup>
       <ServerFiles Include="$(ServerPublishDir)**\*.*" />
@@ -65,19 +76,17 @@
     <Copy SourceFiles="@(ServerFiles)" DestinationFolder="$(OutputPath)Server\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
-  <!-- Microsoft.VSSDK.BuildTools 17.12 no longer imports the legacy VSIX container target in this SDK project.
-       Build the VSIX package explicitly from the compiled extension output. -->
   <Target Name="PackageVsix" AfterTargets="CopyServerToOutput">
     <PropertyGroup>
       <VsixToolsPath Condition="'$(VsixToolsPath)' == ''">$(VsSDKToolsPath)</VsixToolsPath>
-      <VsixToolsPath Condition="'$(VsixToolsPath)' == ''">$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.12.2069\tools\vssdk\bin</VsixToolsPath>
+      <VsixToolsPath Condition="'$(VsixToolsPath)' == ''">$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.0.5241\tools\vssdk\bin</VsixToolsPath>
       <VsixIncludesPath Condition="'$(VsixIncludesPath)' == ''">$(VsSDKIncludes)</VsixIncludesPath>
-      <VsixIncludesPath Condition="'$(VsixIncludesPath)' == ''">$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.12.2069\tools\vssdk\inc</VsixIncludesPath>
+      <VsixIncludesPath Condition="'$(VsixIncludesPath)' == ''">$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.0.5241\tools\vssdk\inc</VsixIncludesPath>
       <VsixContentTypesFile>$(VsixPackageStagingDir)[Content_Types].xml</VsixContentTypesFile>
     </PropertyGroup>
 
     <MakeDir Directories="$(IntermediateOutputPath)" />
-    <Exec Command="&quot;$(VsixToolsPath)\VSCT.exe&quot; &quot;$(MSBuildProjectDirectory)\VSCommandTable.vsct&quot; &quot;$(IntermediateOutputPath)Menus.ctmenu&quot; &quot;-I$(VsixIncludesPath)&quot; -nologo" />
+    <Exec Command="&quot;$(VsixToolsPath)\VSCT.exe&quot; &quot;$(ExtensionSourceDir)VSCommandTable.vsct&quot; &quot;$(IntermediateOutputPath)Menus.ctmenu&quot; &quot;-I$(VsixIncludesPath)&quot; -nologo" />
     <Exec Command="&quot;$(VsixToolsPath)\CreatePkgDef.exe&quot; /out=&quot;$(IntermediateOutputPath)$(AssemblyName).pkgdef&quot; &quot;$(TargetPath)&quot;" />
 
     <RemoveDir Directories="$(VsixPackageStagingDir)" />
@@ -128,7 +137,7 @@
     <WriteLinesToFile File="$(VsixContentTypesFile)" Overwrite="false" Lines="&lt;/Types&gt;" />
 
     <Delete Files="$(VsixPackagePath);$(VsixPackageZipPath)" />
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\build\CreateVsixArchive.ps1&quot; -SourceDirectory &quot;$(VsixPackageStagingDir).&quot; -DestinationPath &quot;$(VsixPackagePath)&quot; -VsixUtilPath &quot;$(VsixToolsPath)\VsixUtil.exe&quot; -SourceManifestPath &quot;$(VsixPackageStagingDir)extension.vsixmanifest&quot;" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(ExtensionSourceDir)build\CreateVsixArchive.ps1&quot; -SourceDirectory &quot;$(VsixPackageStagingDir).&quot; -DestinationPath &quot;$(VsixPackagePath)&quot; -VsixUtilPath &quot;$(VsixToolsPath)\VsixUtil.exe&quot; -SourceManifestPath &quot;$(VsixPackageStagingDir)extension.vsixmanifest&quot;" />
     <Message Importance="high" Text="VSIX created: $(VsixPackagePath)" />
   </Target>
 
