@@ -57,7 +57,7 @@ public class ServerProcessManager : IServerProcessManager
         }
 
         // Start the server process
-        var arguments = $"--pipe \"{_pipeName}\" --host \"{settings.BindingAddress}\" --port {settings.Port} --name \"{settings.ServerName}\" --log-level {settings.LogLevel}";
+        var arguments = $"--pipe \"{_pipeName}\" --parent-pid {Process.GetCurrentProcess().Id} --host \"{settings.BindingAddress}\" --port {settings.Port} --name \"{settings.ServerName}\" --log-level {settings.LogLevel}";
 
         var startInfo = new ProcessStartInfo
         {

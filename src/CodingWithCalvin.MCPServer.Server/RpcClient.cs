@@ -41,6 +41,11 @@ public class RpcClient : IVisualStudioRpc, IServerRpc, IDisposable
 
         _jsonRpc = JsonRpc.Attach(_pipeClient, this);
         _proxy = _jsonRpc.Attach<IVisualStudioRpc>();
+        _ = _jsonRpc.Completion.ContinueWith(
+            _ => _shutdownCts.Cancel(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     public void Dispose()

@@ -1,5 +1,6 @@
 using System;
 using System.CommandLine;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using CodingWithCalvin.MCPServer.Server;
@@ -15,6 +16,13 @@ using ModelContextProtocol.Server;
 var pipeOption = new Option<string>(
     name: "--pipe",
     description: "Named pipe name for connecting to Visual Studio")
+{
+    IsRequired = true
+};
+
+var parentPidOption = new Option<int>(
+    name: "--parent-pid",
+    description: "Visual Studio process ID whose lifetime owns this server")
 {
     IsRequired = true
 };
@@ -42,20 +50,21 @@ var logLevelOption = new Option<string>(
 var rootCommand = new RootCommand("Visual Studio MCP Server")
 {
     pipeOption,
+    parentPidOption,
     hostOption,
     portOption,
     nameOption,
     logLevelOption
 };
 
-rootCommand.SetHandler(async (string pipeName, string host, int port, string serverName, string logLevel) =>
+rootCommand.SetHandler(async (string pipeName, int parentPid, string host, int port, string serverName, string logLevel) =>
 {
-    await RunServerAsync(pipeName, host, port, serverName, logLevel);
-}, pipeOption, hostOption, portOption, nameOption, logLevelOption);
+    await RunServerAsync(pipeName, parentPid, host, port, serverName, logLevel);
+}, pipeOption, parentPidOption, hostOption, portOption, nameOption, logLevelOption);
 
 return await rootCommand.InvokeAsync(args);
 
-static async Task RunServerAsync(string pipeName, string host, int port, string serverName, string logLevel)
+static async Task RunServerAsync(string pipeName, int parentPid, string host, int port, string serverName, string logLevel)
 {
 #pragma warning disable VSTHRD103 // Console.Error.WriteLine is appropriate in console app context
     // Parse log level
@@ -70,8 +79,29 @@ static async Task RunServerAsync(string pipeName, string host, int port, string 
     // Create shutdown token for graceful shutdown
     using var shutdownCts = new CancellationTokenSource();
 
+    Process parentProcess;
+    try
+    {
+        parentProcess = Process.GetProcessById(parentPid);
+    }
+    catch (ArgumentException)
+    {
+        Console.Error.WriteLine("Visual Studio exited before the server started");
+        return;
+    }
+
+    using (parentProcess)
+    {
+        parentProcess.EnableRaisingEvents = true;
+        parentProcess.Exited += (_, _) => shutdownCts.Cancel();
+
+        if (parentProcess.HasExited)
+        {
+            return;
+        }
+
     // Connect to Visual Studio via named pipe
-    var rpcClient = new RpcClient(shutdownCts);
+    using var rpcClient = new RpcClient(shutdownCts);
     await rpcClient.ConnectAsync(pipeName);
 
     Console.Error.WriteLine($"Connected to Visual Studio via pipe: {pipeName}");
@@ -119,5 +149,6 @@ static async Task RunServerAsync(string pipeName, string host, int port, string 
     await app.RunAsync();
 
     Console.Error.WriteLine("Server shutdown complete");
+    }
 #pragma warning restore VSTHRD103
 }
