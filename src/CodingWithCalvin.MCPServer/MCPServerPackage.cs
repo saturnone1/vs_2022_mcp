@@ -190,7 +190,7 @@ public sealed class MCPServerPackage : AsyncPackage
         base.Dispose(disposing);
     }
 
-    private static void LogLoad(string message, Exception? exception = null)
+    internal static void LogLoad(string message, Exception? exception = null)
     {
         try
         {

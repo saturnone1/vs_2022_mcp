@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.Design;
 using System.Linq;
+using System.Threading;
 using System.Windows;
 using CodingWithCalvin.MCPServer.Services;
 using Microsoft.VisualStudio.Shell;
@@ -11,6 +12,9 @@ namespace CodingWithCalvin.MCPServer.Commands;
 
 internal sealed class ServerCommands
 {
+    private static int _operationInProgress;
+    private static string? _activeOperation;
+
     public static async Task InitializeAsync(AsyncPackage package)
     {
         await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -60,7 +64,9 @@ internal sealed class ServerCommands
     {
         if (sender is OleMenuCommand command)
         {
-            command.Enabled = MCPServerPackage.ServerManager == null || !MCPServerPackage.ServerManager.IsRunning;
+            command.Text = _activeOperation == "start" ? "Starting Server..." : "Start Server";
+            command.Enabled = Volatile.Read(ref _operationInProgress) == 0
+                && (MCPServerPackage.ServerManager == null || !MCPServerPackage.ServerManager.IsRunning);
         }
     }
 
@@ -68,7 +74,10 @@ internal sealed class ServerCommands
     {
         if (sender is OleMenuCommand command)
         {
-            command.Enabled = MCPServerPackage.ServerManager != null && MCPServerPackage.ServerManager.IsRunning;
+            command.Text = _activeOperation == "stop" ? "Stopping Server..." : "Stop Server";
+            command.Enabled = Volatile.Read(ref _operationInProgress) == 0
+                && MCPServerPackage.ServerManager != null
+                && MCPServerPackage.ServerManager.IsRunning;
         }
     }
 
@@ -76,8 +85,29 @@ internal sealed class ServerCommands
     {
         if (sender is OleMenuCommand command)
         {
-            command.Enabled = MCPServerPackage.ServerManager != null;
+            command.Text = _activeOperation == "restart" ? "Restarting Server..." : "Restart Server";
+            command.Enabled = Volatile.Read(ref _operationInProgress) == 0
+                && MCPServerPackage.ServerManager != null;
         }
+    }
+
+    private static bool TryBeginOperation(string operation)
+    {
+        if (Interlocked.CompareExchange(ref _operationInProgress, 1, 0) != 0)
+        {
+            return false;
+        }
+
+        _activeOperation = operation;
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+        return true;
+    }
+
+    private static void EndOperation()
+    {
+        _activeOperation = null;
+        Volatile.Write(ref _operationInProgress, 0);
+        System.Windows.Input.CommandManager.InvalidateRequerySuggested();
     }
 
     private static ServerStartSettings CaptureSettings()
@@ -99,10 +129,16 @@ internal sealed class ServerCommands
 
     private static void OnStartServer(object sender, EventArgs e)
     {
+        if (!TryBeginOperation("start")) return;
+        MCPServerPackage.LogLoad("Command: Start Server requested");
         // Capture everything we need on UI thread before going to background
         EnsureServicesInitialized();
         var serverManager = MCPServerPackage.ServerManager;
-        if (serverManager == null) return;
+        if (serverManager == null)
+        {
+            EndOperation();
+            return;
+        }
 
         var startSettings = CaptureSettings();
 
@@ -118,16 +154,23 @@ internal sealed class ServerCommands
             }
             finally
             {
+                MCPServerPackage.LogLoad("Command: Start Server completed");
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+                EndOperation();
             }
         });
     }
 
     private static void OnStopServer(object sender, EventArgs e)
     {
+        if (!TryBeginOperation("stop")) return;
+        MCPServerPackage.LogLoad("Command: Stop Server requested");
         var serverManager = MCPServerPackage.ServerManager;
-        if (serverManager == null) return;
+        if (serverManager == null)
+        {
+            EndOperation();
+            return;
+        }
 
         _ = Task.Run(async () =>
         {
@@ -141,17 +184,24 @@ internal sealed class ServerCommands
             }
             finally
             {
+                MCPServerPackage.LogLoad("Command: Stop Server completed");
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+                EndOperation();
             }
         });
     }
 
     private static void OnRestartServer(object sender, EventArgs e)
     {
+        if (!TryBeginOperation("restart")) return;
+        MCPServerPackage.LogLoad("Command: Restart Server requested");
         EnsureServicesInitialized();
         var serverManager = MCPServerPackage.ServerManager;
-        if (serverManager == null) return;
+        if (serverManager == null)
+        {
+            EndOperation();
+            return;
+        }
 
         var startSettings = CaptureSettings();
 
@@ -168,8 +218,9 @@ internal sealed class ServerCommands
             }
             finally
             {
+                MCPServerPackage.LogLoad("Command: Restart Server completed");
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+                EndOperation();
             }
         });
     }

@@ -62,8 +62,6 @@ public class RpcClient : IVisualStudioRpc, IServerRpc, IDisposable
 
     private IVisualStudioRpc Proxy => _proxy ?? throw new InvalidOperationException("Not connected to Visual Studio");
 
-    public Task NotifyServerStartedAsync() => Proxy.NotifyServerStartedAsync();
-
     public Task<List<ToolInfo>> GetAvailableToolsAsync()
     {
         if (_cachedTools != null)
@@ -105,7 +103,14 @@ public class RpcClient : IVisualStudioRpc, IServerRpc, IDisposable
     {
 #pragma warning disable VSTHRD103 // Console.Error.WriteLine is fine in console app context
         Console.Error.WriteLine("Shutdown requested via RPC");
-        _shutdownCts.Cancel();
+        // Let StreamJsonRpc send the successful response before stopping the host.
+        // Cancelling inline can tear down the pipe while the caller is still
+        // awaiting this RPC, causing Stop/Restart to hang indefinitely.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(100).ConfigureAwait(false);
+            _shutdownCts.Cancel();
+        });
 #pragma warning restore VSTHRD103
         return Task.CompletedTask;
     }

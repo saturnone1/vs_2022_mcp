@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="VS-MCPServer" Version="2026.7.14.2" Language="en-US" Publisher="Coding With Calvin" />
+        <Identity Id="VS-MCPServer" Version="2026.7.14.7" Language="en-US" Publisher="Coding With Calvin" />
         <DisplayName>MCP Server</DisplayName>
         <Description xml:space="preserve">Exposes Visual Studio features as an MCP (Model Context Protocol) server, enabling AI assistants like Claude to interact with Visual Studio programmatically.</Description>
         <MoreInfo>https://github.com/CodingWithCalvin/VS-MCPServer</MoreInfo>

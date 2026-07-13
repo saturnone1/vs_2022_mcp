@@ -31,42 +31,45 @@
     <Buttons>
       <Button guid="guidMCPServerPackageCmdSet" id="cmdidStartServer" priority="0x0100" type="Button">
         <Parent guid="guidMCPServerPackageCmdSet" id="MCPServerMenuGroup"/>
+        <CommandFlag>TextChanges</CommandFlag>
         <Strings>
           <ButtonText>Start Server</ButtonText>
-          <CanonicalName>MCPServer.StartServer</CanonicalName>
-          <LocCanonicalName>MCPServer.StartServer</LocCanonicalName>
+          <CanonicalName>StartServer</CanonicalName>
+          <LocCanonicalName>StartServer</LocCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidMCPServerPackageCmdSet" id="cmdidStopServer" priority="0x0200" type="Button">
         <Parent guid="guidMCPServerPackageCmdSet" id="MCPServerMenuGroup"/>
+        <CommandFlag>TextChanges</CommandFlag>
         <Strings>
           <ButtonText>Stop Server</ButtonText>
-          <CanonicalName>MCPServer.StopServer</CanonicalName>
-          <LocCanonicalName>MCPServer.StopServer</LocCanonicalName>
+          <CanonicalName>StopServer</CanonicalName>
+          <LocCanonicalName>StopServer</LocCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidMCPServerPackageCmdSet" id="cmdidRestartServer" priority="0x0300" type="Button">
         <Parent guid="guidMCPServerPackageCmdSet" id="MCPServerMenuGroup"/>
+        <CommandFlag>TextChanges</CommandFlag>
         <Strings>
           <ButtonText>Restart Server</ButtonText>
-          <CanonicalName>MCPServer.RestartServer</CanonicalName>
-          <LocCanonicalName>MCPServer.RestartServer</LocCanonicalName>
+          <CanonicalName>RestartServer</CanonicalName>
+          <LocCanonicalName>RestartServer</LocCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidMCPServerPackageCmdSet" id="cmdidCopyServerUrl" priority="0x0400" type="Button">
         <Parent guid="guidMCPServerPackageCmdSet" id="MCPServerCopyGroup"/>
         <Strings>
           <ButtonText>Copy Server URL</ButtonText>
-          <CanonicalName>MCPServer.CopyServerUrl</CanonicalName>
-          <LocCanonicalName>MCPServer.CopyServerUrl</LocCanonicalName>
+          <CanonicalName>CopyServerUrl</CanonicalName>
+          <LocCanonicalName>CopyServerUrl</LocCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidMCPServerPackageCmdSet" id="cmdidShowTools" priority="0x0500" type="Button">
         <Parent guid="guidMCPServerPackageCmdSet" id="MCPServerCopyGroup"/>
         <Strings>
           <ButtonText>Show Available Tools</ButtonText>
-          <CanonicalName>MCPServer.ShowTools</CanonicalName>
-          <LocCanonicalName>MCPServer.ShowTools</LocCanonicalName>
+          <CanonicalName>ShowTools</CanonicalName>
+          <LocCanonicalName>ShowTools</LocCanonicalName>
         </Strings>
       </Button>
     </Buttons>

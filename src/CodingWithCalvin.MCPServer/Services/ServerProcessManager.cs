@@ -3,7 +3,6 @@ using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using CodingWithCalvin.MCPServer.Dialogs;
 using Microsoft.VisualStudio.Shell;
@@ -17,15 +16,24 @@ namespace CodingWithCalvin.MCPServer.Services;
 public class ServerProcessManager : IServerProcessManager
 {
     private readonly IRpcServer _rpcServer;
-    private readonly SemaphoreSlim _lifecycleGate = new SemaphoreSlim(1, 1);
-    private CancellationTokenSource? _startupCts;
+    private readonly object _processSync = new object();
+    private readonly object _logSync = new object();
     private Process? _serverProcess;
     private string _pipeName = string.Empty;
     private StreamWriter? _logFileWriter;
     private string? _logFilePath;
     private IVsOutputWindowPane? _outputPane;
 
-    public bool IsRunning => _serverProcess != null && !_serverProcess.HasExited;
+    public bool IsRunning
+    {
+        get
+        {
+            lock (_processSync)
+            {
+                return _serverProcess != null && !_serverProcess.HasExited;
+            }
+        }
+    }
     public string? LogFilePath => _logFilePath;
 
     [ImportingConstructor]
@@ -36,20 +44,14 @@ public class ServerProcessManager : IServerProcessManager
 
     public async Task StartAsync(ServerStartSettings settings)
     {
-        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
-        CancellationTokenSource? startupCts = null;
+        if (IsRunning)
+        {
+            return;
+        }
+
         try
         {
-            if (IsRunning)
-            {
-                return;
-            }
-
-            startupCts = new CancellationTokenSource();
-            _startupCts = startupCts;
-
-        // Initialize logging (file + output pane from UI thread)
-        InitializeLogging(settings);
+            InitializeLogging(settings);
 
         // Generate unique pipe name for this VS instance
         _pipeName = $"vsmcp-{Process.GetCurrentProcess().Id}";
@@ -86,13 +88,15 @@ public class ServerProcessManager : IServerProcessManager
             throw new InvalidOperationException("Failed to start MCP Server process");
         }
 
-        // Store in field and capture local reference to avoid race conditions
-        _serverProcess = process;
+            lock (_processSync)
+            {
+                _serverProcess = process;
+            }
 
         process.EnableRaisingEvents = true;
         process.Exited += OnProcessExited;
 
-        // Start reading output streams (server logs go to stderr by convention)
+        // Stream child output without tying process control to log delivery.
         _ = ReadOutputAsync(process.StandardOutput);
         _ = ReadOutputAsync(process.StandardError);
 
@@ -100,69 +104,26 @@ public class ServerProcessManager : IServerProcessManager
         Log($"Binding: http://{settings.BindingAddress}:{settings.Port}");
         Log($"Log file: {_logFilePath}");
 
-            // Do not report success until Kestrel has bound the HTTP endpoint and the
-            // child has acknowledged readiness over RPC.
-            var startupTimer = Stopwatch.StartNew();
-            while (!_rpcServer.IsReady && startupTimer.Elapsed < TimeSpan.FromSeconds(10))
-            {
-                if (process.HasExited)
-                {
-                    throw new InvalidOperationException($"MCP Server process exited during startup with code {process.ExitCode}");
-                }
-
-                await Task.Delay(50, startupCts.Token).ConfigureAwait(false);
-            }
-
-            if (!_rpcServer.IsReady)
-            {
-                throw new TimeoutException("MCP Server did not become ready within 10 seconds");
-            }
-
-            Log("Server is ready");
-        }
-        catch (OperationCanceledException) when (startupCts?.IsCancellationRequested == true)
-        {
-            Log("Server startup was cancelled");
-            await StopCoreAsync().ConfigureAwait(false);
+            // Starting the child is the Start command's only responsibility.
+            // Runtime bind failures are reported by the child process logs.
+            await Task.Yield();
         }
         catch (Exception ex)
         {
             Log($"Server startup failed: {ex.Message}");
-            await StopCoreAsync().ConfigureAwait(false);
+            await StopAsync().ConfigureAwait(false);
             throw;
-        }
-        finally
-        {
-            if (ReferenceEquals(_startupCts, startupCts))
-            {
-                _startupCts = null;
-            }
-
-            startupCts?.Dispose();
-            _lifecycleGate.Release();
         }
     }
 
     public async Task StopAsync()
     {
-        // A stop request must interrupt an in-progress start rather than queueing
-        // behind the full startup timeout.
-        _startupCts?.Cancel();
-        await _lifecycleGate.WaitAsync().ConfigureAwait(false);
-        try
+        Process? process;
+        lock (_processSync)
         {
-            await StopCoreAsync().ConfigureAwait(false);
+            process = _serverProcess;
+            _serverProcess = null;
         }
-        finally
-        {
-            _lifecycleGate.Release();
-        }
-    }
-
-    private async Task StopCoreAsync()
-    {
-        // Capture reference to avoid race conditions during shutdown
-        var process = _serverProcess;
 
         if (process != null && !process.HasExited)
         {
@@ -173,21 +134,19 @@ public class ServerProcessManager : IServerProcessManager
                 // Unsubscribe from Exited event to prevent duplicate logging
                 process.Exited -= OnProcessExited;
 
-                var exited = false;
+                // Ask politely, but never let RPC block the Stop command.
                 if (_rpcServer.IsConnected)
                 {
-                    // Request graceful shutdown via RPC and wait briefly.
-                    await _rpcServer.RequestShutdownAsync().ConfigureAwait(false);
-                    exited = await Task.Run(() => process.WaitForExit(3000)).ConfigureAwait(false);
+                    var shutdownTask = _rpcServer.RequestShutdownAsync();
+                    await Task.WhenAny(shutdownTask, Task.Delay(500)).ConfigureAwait(false);
                 }
 
+                var exited = await Task.Run(() => process.WaitForExit(1000)).ConfigureAwait(false);
                 if (!exited)
                 {
-                    // Before the pipe connects there is no graceful channel, and
-                    // after a timeout the child must not be left behind.
                     Log("Forcing server termination...");
                     process.Kill();
-                    await Task.Run(() => process.WaitForExit(2000)).ConfigureAwait(false);
+                    await Task.Run(() => process.WaitForExit(1000)).ConfigureAwait(false);
                 }
 
                 Log($"Server stopped (Code: {process.ExitCode})");
@@ -198,14 +157,16 @@ public class ServerProcessManager : IServerProcessManager
             }
         }
 
-        _serverProcess?.Dispose();
-        _serverProcess = null;
+        process?.Dispose();
 
         await _rpcServer.StopAsync().ConfigureAwait(false);
 
         // Close log file
-        _logFileWriter?.Dispose();
-        _logFileWriter = null;
+        lock (_logSync)
+        {
+            _logFileWriter?.Dispose();
+            _logFileWriter = null;
+        }
     }
 
     private void InitializeLogging(ServerStartSettings settings)
@@ -217,8 +178,12 @@ public class ServerProcessManager : IServerProcessManager
             Directory.CreateDirectory(logDir);
 
             var date = DateTime.Now.ToString("yyyy-MM-dd");
-            _logFilePath = Path.Combine(logDir, $"server_{date}.log");
-            _logFileWriter = new StreamWriter(_logFilePath, append: true) { AutoFlush = true };
+            _logFilePath = Path.Combine(logDir, $"server_{date}_{Process.GetCurrentProcess().Id}.log");
+            lock (_logSync)
+            {
+                _logFileWriter?.Dispose();
+                _logFileWriter = new StreamWriter(_logFilePath, append: true) { AutoFlush = true };
+            }
 
             // Clean up old log files (fire and forget to not block startup)
             var retentionDays = settings.LogRetentionDays;
@@ -275,10 +240,15 @@ public class ServerProcessManager : IServerProcessManager
     {
         try
         {
-            while (!reader.EndOfStream)
+            while (true)
             {
                 var line = await reader.ReadLineAsync();
-                if (!string.IsNullOrEmpty(line))
+                if (line == null)
+                {
+                    break;
+                }
+
+                if (line.Length > 0)
                 {
                     Log($"[SERVER] {line}");
                 }
@@ -298,7 +268,10 @@ public class ServerProcessManager : IServerProcessManager
         // Write to file
         try
         {
-            _logFileWriter?.WriteLine(logLine);
+            lock (_logSync)
+            {
+                _logFileWriter?.WriteLine(logLine);
+            }
         }
         catch
         {

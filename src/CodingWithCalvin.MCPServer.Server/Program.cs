@@ -145,7 +145,6 @@ static async Task RunServerAsync(string pipeName, int parentPid, string host, in
     shutdownCts.Token.Register(() => lifetime.StopApplication());
 
     await app.StartAsync();
-    await rpcClient.NotifyServerStartedAsync();
     Console.Error.WriteLine($"MCP Server listening on {bindingUrl} (LogLevel: {logLevel})");
 
     await app.WaitForShutdownAsync();
