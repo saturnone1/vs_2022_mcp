@@ -21,10 +21,12 @@ public class RpcServer : IRpcServer, IVisualStudioRpc
     private CancellationTokenSource? _cts;
     private Task? _listenerTask;
     private bool _disposed;
+    private volatile bool _isReady;
 
     public string PipeName { get; private set; } = string.Empty;
     public bool IsListening { get; private set; }
     public bool IsConnected => _serverProxy != null;
+    public bool IsReady => _isReady;
 
     [ImportingConstructor]
     public RpcServer(IVisualStudioService vsService)
@@ -40,6 +42,7 @@ public class RpcServer : IRpcServer, IVisualStudioRpc
         }
 
         PipeName = pipeName;
+        _isReady = false;
         _cts = new CancellationTokenSource();
         IsListening = true;
 
@@ -77,6 +80,7 @@ public class RpcServer : IRpcServer, IVisualStudioRpc
             }
             finally
             {
+                _isReady = false;
                 _serverProxy = null;
                 _jsonRpc?.Dispose();
                 _jsonRpc = null;
@@ -94,6 +98,7 @@ public class RpcServer : IRpcServer, IVisualStudioRpc
         }
 
         IsListening = false;
+        _isReady = false;
         _cts?.Cancel();
 
         // Dispose JsonRpc to break out of the Completion await
@@ -106,7 +111,7 @@ public class RpcServer : IRpcServer, IVisualStudioRpc
             {
                 // Use a timeout to prevent hanging forever
                 var timeoutTask = Task.Delay(2000);
-                var completedTask = await Task.WhenAny(_listenerTask, timeoutTask);
+                var completedTask = await Task.WhenAny(_listenerTask, timeoutTask).ConfigureAwait(false);
                 if (completedTask == timeoutTask)
                 {
                     // Listener didn't stop in time, just continue
@@ -153,12 +158,18 @@ public class RpcServer : IRpcServer, IVisualStudioRpc
         {
             try
             {
-                await _serverProxy.ShutdownAsync();
+                await _serverProxy.ShutdownAsync().ConfigureAwait(false);
             }
             catch
             {
             }
         }
+    }
+
+    public Task NotifyServerStartedAsync()
+    {
+        _isReady = true;
+        return Task.CompletedTask;
     }
 
     public Task<SolutionInfo?> GetSolutionInfoAsync() => _vsService.GetSolutionInfoAsync();

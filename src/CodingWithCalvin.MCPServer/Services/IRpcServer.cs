@@ -10,6 +10,7 @@ public interface IRpcServer : IDisposable
     string PipeName { get; }
     bool IsListening { get; }
     bool IsConnected { get; }
+    bool IsReady { get; }
 
     Task StartAsync(string pipeName);
     Task StopAsync();

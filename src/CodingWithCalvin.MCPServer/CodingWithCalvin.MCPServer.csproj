@@ -39,8 +39,8 @@
     <ServerPublishDir>$(ServerProjectDir)bin\$(Configuration)\net9.0\publish\</ServerPublishDir>
     <VsixPackageDir>$(MSBuildThisFileDirectory)bin\$(Configuration)\</VsixPackageDir>
     <VsixPackageStagingDir>$(MSBuildProjectDirectory)\obj\$(Configuration)\vsix\</VsixPackageStagingDir>
-    <VsixPackagePath>$(VsixPackageDir)VS-MCPServer.vsix</VsixPackagePath>
-    <VsixPackageZipPath>$(VsixPackageDir)VS-MCPServer.zip</VsixPackageZipPath>
+    <VsixPackagePath>$(VsixPackageDir)VS-MCPServer-VS2022-17.12.vsix</VsixPackagePath>
+    <VsixPackageZipPath>$(VsixPackageDir)VS-MCPServer-VS2022-17.12.zip</VsixPackageZipPath>
   </PropertyGroup>
 
   <!-- Build and publish the server project as self-contained -->

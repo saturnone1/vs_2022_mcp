@@ -96,9 +96,12 @@ public sealed class MCPServerPackage : AsyncPackage
                     .WithEnvironmentAttributes();
 
 #if !DEBUG
-                builder
-                    .WithOtlpHttp("https://api.honeycomb.io")
-                    .WithHeader("x-honeycomb-team", HoneycombConfig.ApiKey);
+                if (!string.Equals(HoneycombConfig.ApiKey, "PLACEHOLDER", StringComparison.Ordinal))
+                {
+                    builder
+                        .WithOtlpHttp("https://api.honeycomb.io")
+                        .WithHeader("x-honeycomb-team", HoneycombConfig.ApiKey);
+                }
 #endif
 
                 builder.Initialize();

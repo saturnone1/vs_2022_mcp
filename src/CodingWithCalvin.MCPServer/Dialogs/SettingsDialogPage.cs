@@ -83,7 +83,7 @@ public class SettingsDialogPage : DialogPage
     [Category("Startup")]
     [DisplayName("Auto-start Server")]
     [Description("Automatically start the MCP server when Visual Studio launches.")]
-    public bool AutoStart { get; set; } = false;
+    public bool AutoStart { get; set; } = true;
 
     public override void LoadSettingsFromStorage()
     {
@@ -95,7 +95,7 @@ public class SettingsDialogPage : DialogPage
             BindingAddress = DefaultBindingAddress;
         }
 
-        if (Port <= 0)
+        if (Port <= 0 || Port > 65535)
         {
             Port = DefaultPort;
         }

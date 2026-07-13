@@ -10,6 +10,7 @@ namespace CodingWithCalvin.MCPServer.Shared;
 /// </summary>
 public interface IVisualStudioRpc
 {
+    Task NotifyServerStartedAsync();
     Task<SolutionInfo?> GetSolutionInfoAsync();
     Task<bool> OpenSolutionAsync(string path);
     Task CloseSolutionAsync(bool saveFirst);

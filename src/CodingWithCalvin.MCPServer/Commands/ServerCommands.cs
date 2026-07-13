@@ -36,7 +36,7 @@ internal sealed class ServerCommands
         // Restart Server command
         var restartCommandId = new CommandID(VSCommandTableVsct.guidMCPServerPackageCmdSet.Guid, VSCommandTableVsct.guidMCPServerPackageCmdSet.cmdidRestartServer);
         var restartCommand = new OleMenuCommand(OnRestartServer, restartCommandId);
-        restartCommand.BeforeQueryStatus += OnBeforeQueryStatusStop;
+        restartCommand.BeforeQueryStatus += OnBeforeQueryStatusRestart;
         commandService.AddCommand(restartCommand);
 
         // Copy Server URL command
@@ -69,6 +69,14 @@ internal sealed class ServerCommands
         if (sender is OleMenuCommand command)
         {
             command.Enabled = MCPServerPackage.ServerManager != null && MCPServerPackage.ServerManager.IsRunning;
+        }
+    }
+
+    private static void OnBeforeQueryStatusRestart(object sender, EventArgs e)
+    {
+        if (sender is OleMenuCommand command)
+        {
+            command.Enabled = MCPServerPackage.ServerManager != null;
         }
     }
 
@@ -141,6 +149,7 @@ internal sealed class ServerCommands
 
     private static void OnRestartServer(object sender, EventArgs e)
     {
+        EnsureServicesInitialized();
         var serverManager = MCPServerPackage.ServerManager;
         if (serverManager == null) return;
 

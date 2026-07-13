@@ -62,6 +62,8 @@ public class RpcClient : IVisualStudioRpc, IServerRpc, IDisposable
 
     private IVisualStudioRpc Proxy => _proxy ?? throw new InvalidOperationException("Not connected to Visual Studio");
 
+    public Task NotifyServerStartedAsync() => Proxy.NotifyServerStartedAsync();
+
     public Task<List<ToolInfo>> GetAvailableToolsAsync()
     {
         if (_cachedTools != null)
