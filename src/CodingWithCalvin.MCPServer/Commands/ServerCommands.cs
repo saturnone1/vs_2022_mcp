@@ -100,11 +100,19 @@ internal sealed class ServerCommands
 
         _ = Task.Run(async () =>
         {
-            await serverManager.StartAsync(startSettings);
-
-            // Refresh command states on UI thread after server starts
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            try
+            {
+                await serverManager.StartAsync(startSettings);
+            }
+            catch (Exception ex)
+            {
+                await ShowOperationErrorAsync("start", ex);
+            }
+            finally
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            }
         });
     }
 
@@ -115,11 +123,19 @@ internal sealed class ServerCommands
 
         _ = Task.Run(async () =>
         {
-            await serverManager.StopAsync();
-
-            // Refresh command states on UI thread after server stops
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            try
+            {
+                await serverManager.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                await ShowOperationErrorAsync("stop", ex);
+            }
+            finally
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            }
         });
     }
 
@@ -132,13 +148,38 @@ internal sealed class ServerCommands
 
         _ = Task.Run(async () =>
         {
-            await serverManager.StopAsync();
-            await serverManager.StartAsync(startSettings);
-
-            // Refresh command states on UI thread after server restarts
-            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            try
+            {
+                await serverManager.StopAsync();
+                await serverManager.StartAsync(startSettings);
+            }
+            catch (Exception ex)
+            {
+                await ShowOperationErrorAsync("restart", ex);
+            }
+            finally
+            {
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                System.Windows.Input.CommandManager.InvalidateRequerySuggested();
+            }
         });
+    }
+
+    private static async Task ShowOperationErrorAsync(string operation, Exception exception)
+    {
+        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+        if (MCPServerPackage.Instance == null)
+        {
+            return;
+        }
+
+        VsShellUtilities.ShowMessageBox(
+            MCPServerPackage.Instance,
+            $"Failed to {operation} the MCP server.\n\n{exception.Message}",
+            "VS MCP Server",
+            OLEMSGICON.OLEMSGICON_CRITICAL,
+            OLEMSGBUTTON.OLEMSGBUTTON_OK,
+            OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
     }
 
     private static void OnCopyServerUrl(object sender, EventArgs e)

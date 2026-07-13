@@ -13,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MessagePack" Version="3.1.8" />
     <PackageReference Include="Microsoft.VisualStudio.Editor" Version="17.0.*" />
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.0.*" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.0.5241" PrivateAssets="all" />

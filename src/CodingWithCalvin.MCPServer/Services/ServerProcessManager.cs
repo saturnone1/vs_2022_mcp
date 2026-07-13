@@ -3,6 +3,7 @@ using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using CodingWithCalvin.MCPServer.Dialogs;
 using Microsoft.VisualStudio.Shell;
@@ -16,6 +17,7 @@ namespace CodingWithCalvin.MCPServer.Services;
 public class ServerProcessManager : IServerProcessManager
 {
     private readonly IRpcServer _rpcServer;
+    private readonly SemaphoreSlim _lifecycleGate = new SemaphoreSlim(1, 1);
     private Process? _serverProcess;
     private string _pipeName = string.Empty;
     private StreamWriter? _logFileWriter;
@@ -33,10 +35,13 @@ public class ServerProcessManager : IServerProcessManager
 
     public async Task StartAsync(ServerStartSettings settings)
     {
-        if (IsRunning)
+        await _lifecycleGate.WaitAsync();
+        try
         {
-            return;
-        }
+            if (IsRunning)
+            {
+                return;
+            }
 
         // Initialize logging (file + output pane from UI thread)
         InitializeLogging(settings);
@@ -90,17 +95,51 @@ public class ServerProcessManager : IServerProcessManager
         Log($"Binding: http://{settings.BindingAddress}:{settings.Port}");
         Log($"Log file: {_logFilePath}");
 
-        // Give the server a moment to start
-        await Task.Delay(500);
+            // Do not report success until the child has completed its RPC handshake.
+            var startupTimer = Stopwatch.StartNew();
+            while (!_rpcServer.IsConnected && startupTimer.Elapsed < TimeSpan.FromSeconds(10))
+            {
+                if (process.HasExited)
+                {
+                    throw new InvalidOperationException($"MCP Server process exited during startup with code {process.ExitCode}");
+                }
 
-        // Check if process exited
-        if (process.HasExited)
+                await Task.Delay(50);
+            }
+
+            if (!_rpcServer.IsConnected)
+            {
+                throw new TimeoutException("MCP Server did not connect to Visual Studio within 10 seconds");
+            }
+
+            Log("Server is ready");
+        }
+        catch (Exception ex)
         {
-            throw new InvalidOperationException($"MCP Server process exited immediately with code {process.ExitCode}");
+            Log($"Server startup failed: {ex.Message}");
+            await StopCoreAsync();
+            throw;
+        }
+        finally
+        {
+            _lifecycleGate.Release();
         }
     }
 
     public async Task StopAsync()
+    {
+        await _lifecycleGate.WaitAsync();
+        try
+        {
+            await StopCoreAsync();
+        }
+        finally
+        {
+            _lifecycleGate.Release();
+        }
+    }
+
+    private async Task StopCoreAsync()
     {
         // Capture reference to avoid race conditions during shutdown
         var process = _serverProcess;

@@ -135,7 +135,17 @@ public sealed class MCPServerPackage : AsyncPackage
                             LogRetentionDays = Settings.LogRetentionDays,
                             OutputPane = OutputPaneService?.GetPane()
                         };
-                        _ = Task.Run(async () => await ServerManager.StartAsync(startSettings));
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await ServerManager.StartAsync(startSettings);
+                            }
+                            catch (Exception ex)
+                            {
+                                LogLoad("InitializeAsync: autostart failed", ex);
+                            }
+                        });
                     }
                     LogLoad("InitializeAsync: autostart handled");
                 }
